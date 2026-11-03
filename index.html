@@ -136,7 +136,7 @@ input[type=text],textarea{width:100%;font:inherit;border:2px solid var(--line);b
     <div class="say"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 4l4.2 9.6L34 15l-7.5 6.7L28.6 32 20 26.8 11.4 32l2.1-10.3L6 15l9.8-1.4z" fill="#FFE59A" stroke="#E8B94A" stroke-width="2" stroke-linejoin="round"/></svg><span id="home-say"></span></div>
     <div class="card">
       <div class="goalrow">
-        <button class="ring" id="goal-btn" aria-label="週の目標を変える">
+        <button class="ring" id="goal-btn" aria-label="毎日の目安を変える">
           <svg viewBox="0 0 132 132"><circle cx="66" cy="66" r="56" fill="none" stroke="#fff" stroke-width="14"/><circle id="goal-arc" cx="66" cy="66" r="56" fill="none" stroke="#65B8E5" stroke-width="14" stroke-linecap="round" stroke-dasharray="351.9" stroke-dashoffset="351.9" style="transition:stroke-dashoffset .8s"/></svg>
           <span class="c"><b id="goal-pct">0%</b><small id="goal-txt">0 / 60分</small></span>
         </button>
@@ -367,13 +367,19 @@ function renderHome() {
   $('lv-txt').textContent = `あと${S.level.need - S.level.into}EXP`;
   const left = S.todayTarget - S.todayMinutes, weekLeft = S.weeklyGoal - S.weekMinutes;
   $('home-say').textContent = weekLeft <= 0 ? `今週の目標 ${hours(S.weeklyGoal)} クリア！ すごい！`
-    : S.todayMinutes === 0 ? `今日の目安は${hm(S.todayTarget)}。まずは50分からはじめよう！`
+    : S.todayMinutes === 0 ? `今日は${S.todayKind}。目安は${hm(S.todayTarget)}、まずは50分からはじめよう！`
     : left > 0 ? `今日の目安まで、あと${hm(left)}！` : `今日の目安クリア！ 今週はあと${hm(weekLeft)}`;
 }
 $('goal-btn').onclick = () => {
-  const opts = [10, 15, 20, 25, 30, 35];
-  sheet(`<h2>週の目標</h2><p class="muted">1週間（月〜日）の目標の勉強時間を選んでね。今日の目安は、週の残りの時間を残りの日数で割って出すよ</p><div class="chips">${opts.map(h => `<button class="chip ${h * 60 === S.weeklyGoal ? 'on' : ''}" data-m="${h}">${h}時間</button>`).join('')}</div>`, el => {
-    el.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { el.remove(); call('setWeeklyGoal', Number(b.dataset.m)).then(apply).catch(fail); });
+  const wd = [1, 1.5, 2, 2.5, 3, 4], hd = [4, 5, 6, 7.5, 8, 10];
+  let a = S.weekdayGoal / 60, b = S.holidayGoal / 60;
+  const row = (list, cur, attr) => list.map(h => `<button class="chip ${h === cur ? 'on' : ''}" ${attr}="${h}">${h}時間</button>`).join('');
+  sheet(`<h2>毎日の目安</h2><p class="muted">平日（月〜金）と休日（土日）の勉強時間を選んでね</p><div class="field"><label>平日</label><div class="chips">${row(wd, a, 'data-a')}</div></div><div class="field"><label>休日</label><div class="chips">${row(hd, b, 'data-b')}</div></div><p class="muted" id="g-sum"></p><button class="btn main" id="g-save">これで決める</button>`, el => {
+    const sum = () => { el.querySelector('#g-sum').textContent = `1週間で ${hours((a * 5 + b * 2) * 60)}`; };
+    el.querySelectorAll('[data-a]').forEach(x => x.onclick = () => { a = Number(x.dataset.a); el.querySelectorAll('[data-a]').forEach(y => y.classList.toggle('on', y === x)); sum(); });
+    el.querySelectorAll('[data-b]').forEach(x => x.onclick = () => { b = Number(x.dataset.b); el.querySelectorAll('[data-b]').forEach(y => y.classList.toggle('on', y === x)); sum(); });
+    sum();
+    el.querySelector('#g-save').onclick = () => { el.remove(); call('setDayGoals', a, b).then(apply).catch(fail); };
   });
 };
 
