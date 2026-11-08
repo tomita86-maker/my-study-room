@@ -119,6 +119,33 @@ input[type=text],textarea{width:100%;font:inherit;border:2px solid var(--line);b
 .seg button.on{background:#fff;color:var(--ink)}
 .msg{text-align:center;font-size:14px;color:var(--accent);min-height:1.6em;margin-top:8px;font-weight:700}
 .load{text-align:center;color:var(--muted);padding:60px 0}
+.mhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.mhead b{font-size:18px;font-weight:900}
+.mhead button{width:40px;height:40px;border-radius:14px;background:var(--card);font-size:20px;font-weight:900}
+.mhead button:disabled{opacity:.3}
+.sum2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-bottom:12px}
+.sum2 div{background:var(--card);border-radius:16px;padding:8px 12px}
+.sum2 small{display:block;color:var(--muted);font-size:12px;font-weight:700}
+.sum2 b{font-size:18px}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-bottom:12px}
+.cal .wd{text-align:center;font-size:11px;color:var(--muted);font-weight:700}
+.cal button{min-width:0;aspect-ratio:1/1.08;border-radius:12px;background:#fff;border:2px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0;line-height:1.15}
+.cal button span{font-size:13px;font-weight:700}
+.cal button small{font-size:10px;font-weight:900;min-height:1.2em}
+.cal button.l1{background:var(--sub);border-color:var(--sub)}
+.cal button.l2{background:var(--main);border-color:var(--main)}
+.cal button.l3{background:var(--accent);border-color:var(--accent);color:#fff}
+.cal button.today{box-shadow:inset 0 0 0 2px var(--ink)}
+.cal button.sel{outline:3px solid var(--warm);outline-offset:1px}
+.cal button:disabled{opacity:.35}
+.rec{display:flex;align-items:center;gap:10px;background:#fff;border-radius:14px;padding:10px 12px;margin-top:8px;width:100%;text-align:left}
+.rec .s{font-weight:900}
+.rec .m{margin-left:auto;font-weight:900;white-space:nowrap}
+.rec .memo{display:block;font-size:12px;color:var(--muted)}
+.tag{font-size:10px;font-weight:900;color:var(--muted);background:var(--card);border-radius:8px;padding:0 6px;margin-left:4px}
+.selrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+select,input[type=date]{width:100%;min-width:0;display:block;font:inherit;border:2px solid var(--line);border-radius:14px;padding:10px 12px;background:#fff;color:var(--ink);-webkit-appearance:none;appearance:none;min-height:48px}
+select{padding-right:34px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%2365B8E5' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 12px center}
 </style>
 </head>
 <body>
@@ -170,6 +197,9 @@ input[type=text],textarea{width:100%;font:inherit;border:2px solid var(--line);b
 
   <!-- 勉強 -->
   <section id="v-study" class="hide">
+    <div class="seg"><button class="on" data-st="timer">タイマー</button><button data-st="log">きろく</button></div>
+    <div id="st-log" class="hide"></div>
+    <div id="st-timer">
     <div id="study-setup">
       <h2>勉強タイマー</h2>
       <div class="field"><label>科目</label><div class="chips" id="subj"></div></div>
@@ -181,6 +211,7 @@ input[type=text],textarea{width:100%;font:inherit;border:2px solid var(--line);b
       <div class="c"><small id="t-label">50分</small><b id="t-time">50:00</b><small id="t-sub"></small></div>
     </div>
     <div id="t-btns"></div>
+    </div>
   </section>
 
   <!-- 出し直し -->
@@ -513,6 +544,112 @@ function finish() {
   }).catch(e => { btn.disabled = false; btn.textContent = '終わって記録'; fail(e); });
 }
 setInterval(() => { if (T && !T.pausedAt) tick(); }, 500);
+
+// ---------- きろく（日ごとの勉強時間。あとから追加・修正・削除） ----------
+const WD = ['日', '月', '火', '水', '木', '金', '土'];
+let H = null, logMonth = null, logSel = null;
+document.querySelectorAll('[data-st]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('[data-st]').forEach(x => x.classList.toggle('on', x === b));
+  $('st-timer').classList.toggle('hide', b.dataset.st !== 'timer');
+  $('st-log').classList.toggle('hide', b.dataset.st !== 'log');
+  if (b.dataset.st === 'log') loadLog(logMonth || S.today.slice(0, 7));
+});
+const dow = ymd => new Date(ymd + 'T00:00:00Z').getUTCDay();
+const jp = ymd => `${Number(ymd.slice(5, 7))}月${Number(ymd.slice(8))}日（${WD[dow(ymd)]}）`;
+const shortM = m => m >= 60 ? Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0') : m + '分';
+function shiftMonth(mo, n) { const [y, m] = mo.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); return d.toISOString().slice(0, 7); }
+function loadLog(mo, sel) {
+  logMonth = mo;
+  if (sel) logSel = sel;
+  if (!H) $('st-log').innerHTML = '<p class="load">読み込み中…</p>';
+  return call('getHistory', mo).then(h => { H = h; if (!logSel || logSel.slice(0, 7) !== mo) logSel = mo === h.today.slice(0, 7) ? h.today : null; renderLog(); })
+    .catch(() => { $('st-log').innerHTML = '<p class="empty">読み込めませんでした。電波のいい所で開き直してね</p>'; });
+}
+function renderLog() {
+  const mo = H.month, [y, m] = mo.split('-').map(Number);
+  const first = mo + '-01', days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const lead = (dow(first) + 6) % 7; // 月曜はじまり
+  let cells = ['月', '火', '水', '木', '金', '土', '日'].map(w => `<div class="wd">${w}</div>`).join('') + '<div></div>'.repeat(lead);
+  for (let d = 1; d <= days; d++) {
+    const ymd = mo + '-' + String(d).padStart(2, '0'), min = H.days[ymd] || 0;
+    const lv = !min ? '' : min >= 120 ? 'l3' : min >= 60 ? 'l2' : 'l1';
+    cells += `<button data-d="${ymd}" class="${lv} ${ymd === H.today ? 'today' : ''} ${ymd === logSel ? 'sel' : ''}" ${ymd > H.today ? 'disabled' : ''} aria-label="${jp(ymd)} ${min ? hm(min) : '記録なし'}"><span>${d}</span><small>${min ? shortM(min) : ''}</small></button>`;
+  }
+  let detail = '<p class="muted" style="text-align:center">日にちをタップすると、その日の記録が見られるよ</p>';
+  if (logSel) {
+    const recs = H.records.filter(r => r.date === logSel), tot = recs.reduce((a, r) => a + r.minutes, 0);
+    const bySub = {}; recs.forEach(r => { bySub[r.subject] = (bySub[r.subject] || 0) + r.minutes; });
+    detail = `<div class="card"><h2 style="margin-bottom:2px">${jp(logSel)}</h2><p class="muted" style="margin:0">${recs.length ? `合計 <b style="color:var(--ink);font-size:16px">${hm(tot)}</b>・${Object.keys(bySub).map(k => `${k} ${hm(bySub[k])}`).join('・')}` : 'この日の記録はまだないよ'}</p>
+      <div id="log-recs"></div>
+      ${logSel >= H.minDate ? `<button class="btn soft" style="margin-top:10px" id="log-add">＋この日に記録を足す</button>` : '<p class="muted" style="margin:10px 0 0">あとから足せるのは30日前までだよ</p>'}</div>`;
+  }
+  $('st-log').innerHTML = `<div class="mhead"><button id="log-prev" aria-label="前の月">‹</button><b>${y}年${m}月</b><button id="log-next" aria-label="次の月" ${mo >= H.today.slice(0, 7) ? 'disabled' : ''}>›</button></div>
+    <div class="sum2"><div><small>この月</small><b>${hm(H.monthMinutes)}</b></div><div><small>これまでの合計</small><b>${hours(H.totalMinutes)}</b></div></div>
+    <div class="cal">${cells}</div>${detail}
+    <button class="btn main" id="log-new">記録を足す（忘れた日の分）</button>`;
+  $('log-prev').onclick = () => loadLog(shiftMonth(mo, -1));
+  $('log-next').onclick = () => loadLog(shiftMonth(mo, 1));
+  $('st-log').querySelectorAll('[data-d]').forEach(b => b.onclick = () => { logSel = b.dataset.d; renderLog(); });
+  $('log-new').onclick = () => editRecord(null, logSel && logSel >= H.minDate ? logSel : H.today);
+  if (logSel) {
+    const box = $('log-recs');
+    H.records.filter(r => r.date === logSel).forEach(r => {
+      const el = document.createElement('button');
+      el.className = 'rec';
+      el.innerHTML = '<span><span class="s"></span><span class="tag"></span><span class="memo"></span></span><span class="m"></span><span class="muted">›</span>';
+      el.querySelector('.s').textContent = r.subject;
+      const tag = el.querySelector('.tag'); if (r.manual) tag.textContent = r.manual === '手入力' ? 'あとから入力' : '直した'; else tag.remove();
+      el.querySelector('.memo').textContent = r.memo;
+      el.querySelector('.m').textContent = hm(r.minutes);
+      el.onclick = () => editRecord(r);
+      box.appendChild(el);
+    });
+    const add = $('log-add'); if (add) add.onclick = () => editRecord(null, logSel);
+  }
+}
+// r があれば直す、なければ足す
+function editRecord(r, date) {
+  const id = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); // 二度押ししても1回だけ記録される
+  let subj = r ? r.subject : (pick.subject || S.subjects[0]);
+  const subs = S.subjects.indexOf(subj) < 0 ? S.subjects.concat(subj) : S.subjects;
+  const mins = r ? r.minutes : 50;
+  const opt = (n, cur, unit) => Array.from({ length: n }, (_, i) => `<option value="${i}" ${i === cur ? 'selected' : ''}>${i}${unit}</option>`).join('');
+  sheet(`<h2>${r ? '記録を直す' : '記録を足す'}</h2>
+    <div class="field"><label>日付</label><input type="date" id="e-date" min="${H.minDate}" max="${H.today}" value="${r ? r.date : date}"></div>
+    <div class="field"><label>科目</label><div class="chips" id="e-subj">${subs.map(s => `<button class="chip ${s === subj ? 'on' : ''}" data-es></button>`).join('')}</div></div>
+    <div class="field"><label>勉強した時間</label><div class="selrow"><select id="e-h" aria-label="時間">${opt(5, Math.floor(mins / 60), '時間')}</select><select id="e-m" aria-label="分">${opt(60, mins % 60, '分')}</select></div></div>
+    <div class="field"><label>やったこと（なくてもいい）</label><input type="text" id="e-memo" maxlength="100"></div>
+    <button class="btn main" id="e-save">${r ? 'この内容で直す' : '記録する'}</button>
+    ${r ? '<button class="btn" style="margin-top:8px;color:var(--muted);font-size:14px" id="e-del">この記録を消す</button>' : ''}
+    <p class="msg" id="e-msg" role="status" aria-live="polite"></p>`, el => {
+    el.querySelectorAll('[data-es]').forEach((b, i) => { b.textContent = subs[i]; b.onclick = () => { subj = subs[i]; el.querySelectorAll('[data-es]').forEach(x => x.classList.toggle('on', x === b)); }; });
+    el.querySelector('#e-memo').value = r ? r.memo : '';
+    const msg = el.querySelector('#e-msg'), save = el.querySelector('#e-save');
+    const busy = on => el.querySelectorAll('button,select,input').forEach(x => x.disabled = on);
+    const done = (d, res) => { el.remove(); apply(res.state); H = null; loadLog(d.slice(0, 7), d); };
+    save.onclick = () => {
+      const d = el.querySelector('#e-date').value, m = Number(el.querySelector('#e-h').value) * 60 + Number(el.querySelector('#e-m').value);
+      if (!d) return msg.textContent = '日付を選んでね';
+      if (d > H.today) return msg.textContent = '未来の日付には記録できないよ';
+      if (m < 1) return msg.textContent = '時間を選んでね';
+      const rec = { id: id, date: d, subject: subj, minutes: m, memo: el.querySelector('#e-memo').value.trim() };
+      busy(true); msg.textContent = '保存中…';
+      (r ? call('updateRecord', r.id, rec) : call('addRecord', rec)).then(res => {
+        done(d, res);
+        if (r) toast('直したよ');
+        else if (!res.reward) toast('もう記録してあったよ');
+        else toast(`${jp(d)}に${hm(res.reward.minutes)}記録したよ・+${res.reward.exp}EXP・+${res.reward.coins + res.reward.goalBonus + res.reward.weekBonus}コイン`);
+      }).catch(e => { busy(false); msg.textContent = e.message || '保存できませんでした。もう一度押してね'; });
+    };
+    const del = el.querySelector('#e-del');
+    if (del) del.onclick = () => {
+      if (!confirm(`${jp(r.date)}の${r.subject} ${hm(r.minutes)}を消す？\nもらった経験値とコインも戻るよ`)) return;
+      busy(true); msg.textContent = '消しています…';
+      call('deleteRecord', r.id).then(res => { done(r.date, res); toast('消したよ'); })
+        .catch(e => { busy(false); msg.textContent = e.message || '消せませんでした。もう一度押してね'; });
+    };
+  });
+}
 
 // ---------- 出し直し ----------
 let rvSubject = null, imageData = '';
